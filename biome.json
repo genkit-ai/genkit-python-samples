@@ -1,38 +1,47 @@
 {
-    "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-    "organizeImports": {
-        "enabled": true
+    "$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
     },
     "linter": {
         "enabled": true,
         "rules": {
-            "recommended": true
+            "recommended": true,
+            "style": {
+                "noParameterAssign": "error",
+                "useAsConstAssertion": "error",
+                "useDefaultParameterLast": "error",
+                "useEnumInitializers": "error",
+                "useSelfClosingElements": "error",
+                "useSingleVarDeclarator": "error",
+                "noUnusedTemplateLiteral": "error",
+                "useNumberNamespace": "error",
+                "noInferrableTypes": "error",
+                "noUselessElse": "error"
+            },
+            "security": {
+                "noDangerouslySetInnerHtml": "error"
+            },
+            "suspicious": {
+                "noExplicitAny": "warn",
+                "noConsole": "warn"
+            }
         }
     },
     "files": {
         "ignoreUnknown": true,
-        "ignore": [
-            "**/.dist/**",
-            "**/.eggs/**",
-            "**/.idea/**",
-            "**/.mypy_cache/**",
-            "**/.next/**",
-            "**/.output/**",
-            "**/.pytest_cache/**",
-            "**/.ruff_cache/**",
-            "**/.venv/**",
-            "**/.wxt/**",
-            "**/__pycache__/**",
-            "**/coverage/**",
-            "**/develop-eggs/**",
-            "**/dist/**",
-            "**/manifest.*.json",
-            "**/node_modules/**",
-            ".nx/**",
-            ".trunk/**",
-            "bazel-*/**",
-            "node_modules/**",
-            "third_party/**"
+        "includes": [
+            "**",
+            "!**/.angular/**",
+            "!**/.storybook/**",
+            "!**/.cache/**",
+            "!**/coverage/**",
+            "!**/dist/**",
+            "!**/node_modules/**"
         ]
     },
     "formatter": {
@@ -51,7 +60,7 @@
             "bracketSpacing": true,
             "jsxQuoteStyle": "double",
             "lineEnding": "lf",
-            "lineWidth": 80,
+            "lineWidth": 100,
             "quoteStyle": "single",
             "semicolons": "always",
             "trailingCommas": "es5"
@@ -62,7 +71,7 @@
             "indentStyle": "space",
             "indentWidth": 2,
             "lineEnding": "lf",
-            "lineWidth": 80,
+            "lineWidth": 100,
             "trailingCommas": "none"
         }
     }

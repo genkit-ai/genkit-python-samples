@@ -31,3 +31,26 @@ var/
 venv/
 wheels/
 node_modules/
+
+# Angular / Frontend
+.angular/
+storybook-static/
+.turbo/
+coverage/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Logs
+debug-storybook.log
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db
