@@ -290,8 +290,8 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
       <!-- Input Section - Gemini Style -->
       <div class="input-section"
            [@inputSlideDown]="chatStarted() || chatService.messages().length > 0 ? 'bottom' : 'center'">
-        <!-- Welcome Content (above chatbox) - fades when assistant response appears -->
-        @if (!hasAssistantResponse()) {
+        <!-- Welcome Header (fades when first message appears) -->
+        @if (chatService.messages().length === 0) {
           <div class="welcome-header" @welcomeFadeOut>
             <div class="welcome-logo">
               <img src="genkit-logo.png" alt="Genkit">
@@ -303,19 +303,19 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
             </h1>
             <p class="welcome-subtitle">{{ 'chat.greetingSubtitle' | translate }}</p>
           </div>
-
-          <!-- Quick Action Chips (between greeting and chatbox) -->
-          <div class="quick-chips" @welcomeFadeOut>
-            @for (action of quickActions; track action.labelKey) {
-              <button mat-stroked-button
-                      class="quick-chip"
-                      (click)="useQuickAction(action.prompt)">
-                <mat-icon class="chip-icon" [style.color]="action.color">{{ action.icon }}</mat-icon>
-                <span>{{ action.labelKey | translate }}</span>
-              </button>
-            }
-          </div>
         }
+
+        <!-- Quick Action Chips (always visible for quick prompts) -->
+        <div class="quick-chips">
+          @for (action of quickActions; track action.labelKey) {
+            <button mat-stroked-button
+                    class="quick-chip"
+                    (click)="useQuickAction(action.prompt)">
+              <mat-icon class="chip-icon" [style.color]="action.color">{{ action.icon }}</mat-icon>
+              <span>{{ action.labelKey | translate }}</span>
+            </button>
+          }
+        </div>
 
         <!-- Prompt Queue (shows when loading and has queued items) -->
         @if (chatService.isLoading() && chatService.promptQueue().length > 0) {
@@ -809,13 +809,21 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
       line-height: 1.4;
     }
 
-    /* Messages */
+    /* Messages - start near input, grow upward as conversation fills */
     .messages-container {
       flex: 1;
       min-height: 0; /* Critical for flexbox scrolling */
       overflow-y: auto;
       padding: 24px 0;
       padding-bottom: 120px; /* Large space before input section + queue */
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end; /* Align messages to bottom, grow upward */
+    }
+
+    /* Inner wrapper to allow proper scrolling when content overflows */
+    .messages-container > * {
+      flex-shrink: 0;
     }
 
     .message-row {
