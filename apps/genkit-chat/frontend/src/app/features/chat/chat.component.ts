@@ -16,12 +16,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { animate, style, transition, trigger } from '@angular/animations';
+import { animate, state, style, transition, trigger } from '@angular/animations';
 import { type CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
 import {
   type AfterViewInit,
   Component,
+  computed,
   type ElementRef,
   effect,
   inject,
@@ -153,11 +154,38 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
         animate('100ms ease-in', style({ opacity: 0, transform: 'translateX(-10px)' })),
       ]),
     ]),
+    // Fade out animation for welcome header when first message appears (slower, graceful exit)
+    trigger('welcomeFadeOut', [
+      transition(':leave', [
+        animate('500ms ease-out', style({
+          opacity: 0,
+          transform: 'translateY(-30px) scale(0.95)',
+        })),
+      ]),
+    ]),
+    // Slide down animation for input section when transitioning from welcome to chat
+    trigger('inputSlideDown', [
+      state('center', style({
+        position: 'absolute',
+        top: '50%',
+        bottom: 'auto',
+        transform: 'translateY(-50%)',
+      })),
+      state('bottom', style({
+        position: 'absolute',
+        top: 'auto',
+        bottom: '24px',
+        transform: 'translateY(0)',
+      })),
+      transition('center => bottom', [
+        animate('400ms cubic-bezier(0.4, 0, 0.2, 1)'),
+      ]),
+    ]),
   ],
   template: `
     <div class="chat-container"
-         [class.welcome-mode]="chatService.messages().length === 0"
-         [class.has-messages]="chatService.messages().length > 0"
+         [class.welcome-mode]="!chatStarted() && chatService.messages().length === 0"
+         [class.has-messages]="chatStarted() || chatService.messages().length > 0"
          (dragover)="onDragOver($event)"
          (dragleave)="onDragLeave($event)"
          (drop)="onDrop($event)">
@@ -260,10 +288,11 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
       </div>
 
       <!-- Input Section - Gemini Style -->
-      <div class="input-section">
-        <!-- Welcome Content (above chatbox) - hides when responses start streaming -->
-        @if (chatService.messages().length === 0) {
-          <div class="welcome-header">
+      <div class="input-section"
+           [@inputSlideDown]="chatStarted() || chatService.messages().length > 0 ? 'bottom' : 'center'">
+        <!-- Welcome Content (above chatbox) - fades when assistant response appears -->
+        @if (!hasAssistantResponse()) {
+          <div class="welcome-header" @welcomeFadeOut>
             <div class="welcome-logo">
               <img src="genkit-logo.png" alt="Genkit">
             </div>
@@ -276,7 +305,7 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
           </div>
 
           <!-- Quick Action Chips (between greeting and chatbox) -->
-          <div class="quick-chips">
+          <div class="quick-chips" @welcomeFadeOut>
             @for (action of quickActions; track action.labelKey) {
               <button mat-stroked-button
                       class="quick-chip"
@@ -1512,12 +1541,10 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
       }
 
       .input-section {
-        position: absolute;
-        top: 50%;
+        /* Position controlled by @inputSlideDown animation */
         left: 0;
         right: 0;
         margin: 0 auto;
-        transform: translateY(-50%);
         max-width: 820px;
         width: calc(100% - 48px);
       }
@@ -1533,13 +1560,10 @@ import { SafeMarkdownPipe } from '../../shared/pipes/safe-markdown.pipe';
       }
 
       .input-section {
-        position: absolute;
-        bottom: 24px;
-        top: auto;
+        /* Position controlled by @inputSlideDown animation */
         left: 0;
         right: 0;
         margin: 0 auto;
-        transform: translateY(0);
       }
     }
 
@@ -2341,6 +2365,12 @@ export class ChatComponent implements OnDestroy, AfterViewInit {
 
   // Animation state
   isPulsing = false;
+  // Tracks when chat has been initiated (for immediate slide-down animation)
+  chatStarted = signal(false);
+  // Tracks when assistant response content has started appearing
+  hasAssistantResponse = computed(() =>
+    this.chatService.messages().some((m) => m.role === 'assistant' && m.content.length > 0)
+  );
 
   // Greeting carousel - macOS style with RTL/LTR support (50 languages)
   greetings: {
@@ -2349,57 +2379,57 @@ export class ChatComponent implements OnDestroy, AfterViewInit {
     dir?: 'ltr' | 'rtl';
     anim?: 'type' | 'slide';
   }[] = [
-    { text: 'Hello', lang: 'English', dir: 'ltr', anim: 'type' },
-    { text: 'Hola', lang: 'Spanish', dir: 'ltr', anim: 'type' },
-    { text: 'Bonjour', lang: 'French', dir: 'ltr', anim: 'type' },
-    { text: '你好', lang: 'Chinese', dir: 'ltr', anim: 'slide' },
-    { text: 'こんにちは', lang: 'Japanese', dir: 'ltr', anim: 'slide' },
-    { text: '안녕하세요', lang: 'Korean', dir: 'ltr', anim: 'slide' },
-    { text: 'مرحبا', lang: 'Arabic', dir: 'rtl', anim: 'type' },
-    { text: 'שלום', lang: 'Hebrew', dir: 'rtl', anim: 'type' },
-    { text: 'سلام', lang: 'Persian', dir: 'rtl', anim: 'type' },
-    { text: 'نمستے', lang: 'Urdu', dir: 'rtl', anim: 'type' },
-    { text: 'नमस्ते', lang: 'Hindi', dir: 'ltr', anim: 'slide' },
-    { text: 'Ciao', lang: 'Italian', dir: 'ltr', anim: 'type' },
-    { text: 'Olá', lang: 'Portuguese', dir: 'ltr', anim: 'type' },
-    { text: 'Привет', lang: 'Russian', dir: 'ltr', anim: 'type' },
-    { text: 'Hallo', lang: 'German', dir: 'ltr', anim: 'type' },
-    { text: 'Merhaba', lang: 'Turkish', dir: 'ltr', anim: 'type' },
-    { text: 'Xin chào', lang: 'Vietnamese', dir: 'ltr', anim: 'type' },
-    { text: 'สวัสดี', lang: 'Thai', dir: 'ltr', anim: 'slide' },
-    { text: 'Γεια σου', lang: 'Greek', dir: 'ltr', anim: 'type' },
-    { text: 'Cześć', lang: 'Polish', dir: 'ltr', anim: 'type' },
-    { text: 'Hoi', lang: 'Dutch', dir: 'ltr', anim: 'type' },
-    { text: 'Hej', lang: 'Swedish', dir: 'ltr', anim: 'type' },
-    { text: 'Halo', lang: 'Indonesian', dir: 'ltr', anim: 'type' },
-    { text: 'Habari', lang: 'Swahili', dir: 'ltr', anim: 'type' },
-    { text: 'Привіт', lang: 'Ukrainian', dir: 'ltr', anim: 'type' },
-    { text: 'Ahoj', lang: 'Czech', dir: 'ltr', anim: 'type' },
-    { text: 'Kumusta', lang: 'Filipino', dir: 'ltr', anim: 'type' },
-    { text: 'স্বাগতম', lang: 'Bengali', dir: 'ltr', anim: 'slide' },
-    { text: 'வணக்கம்', lang: 'Tamil', dir: 'ltr', anim: 'slide' },
-    { text: 'Selamat', lang: 'Malay', dir: 'ltr', anim: 'type' },
-    { text: 'Hei', lang: 'Norwegian', dir: 'ltr', anim: 'type' },
-    { text: 'Hej', lang: 'Danish', dir: 'ltr', anim: 'type' },
-    { text: 'Moi', lang: 'Finnish', dir: 'ltr', anim: 'type' },
-    { text: 'Szia', lang: 'Hungarian', dir: 'ltr', anim: 'type' },
-    { text: 'Salut', lang: 'Romanian', dir: 'ltr', anim: 'type' },
-    { text: 'Hola', lang: 'Catalan', dir: 'ltr', anim: 'type' },
-    { text: 'Ahoj', lang: 'Slovak', dir: 'ltr', anim: 'type' },
-    { text: 'Bok', lang: 'Croatian', dir: 'ltr', anim: 'type' },
-    { text: 'Здраво', lang: 'Serbian', dir: 'ltr', anim: 'type' },
-    { text: 'Živjo', lang: 'Slovenian', dir: 'ltr', anim: 'type' },
-    { text: 'Sveiki', lang: 'Latvian', dir: 'ltr', anim: 'type' },
-    { text: 'Labas', lang: 'Lithuanian', dir: 'ltr', anim: 'type' },
-    { text: 'Tere', lang: 'Estonian', dir: 'ltr', anim: 'type' },
-    { text: 'Halló', lang: 'Icelandic', dir: 'ltr', anim: 'type' },
-    { text: 'Helo', lang: 'Welsh', dir: 'ltr', anim: 'type' },
-    { text: 'Dia dhuit', lang: 'Irish', dir: 'ltr', anim: 'type' },
-    { text: 'Halò', lang: 'Scottish Gaelic', dir: 'ltr', anim: 'type' },
-    { text: 'Kia ora', lang: 'Māori', dir: 'ltr', anim: 'type' },
-    { text: 'Aloha', lang: 'Hawaiian', dir: 'ltr', anim: 'type' },
-    { text: 'Talofa', lang: 'Samoan', dir: 'ltr', anim: 'type' },
-  ];
+      { text: 'Hello', lang: 'English', dir: 'ltr', anim: 'type' },
+      { text: 'Hola', lang: 'Spanish', dir: 'ltr', anim: 'type' },
+      { text: 'Bonjour', lang: 'French', dir: 'ltr', anim: 'type' },
+      { text: '你好', lang: 'Chinese', dir: 'ltr', anim: 'slide' },
+      { text: 'こんにちは', lang: 'Japanese', dir: 'ltr', anim: 'slide' },
+      { text: '안녕하세요', lang: 'Korean', dir: 'ltr', anim: 'slide' },
+      { text: 'مرحبا', lang: 'Arabic', dir: 'rtl', anim: 'type' },
+      { text: 'שלום', lang: 'Hebrew', dir: 'rtl', anim: 'type' },
+      { text: 'سلام', lang: 'Persian', dir: 'rtl', anim: 'type' },
+      { text: 'نمستے', lang: 'Urdu', dir: 'rtl', anim: 'type' },
+      { text: 'नमस्ते', lang: 'Hindi', dir: 'ltr', anim: 'slide' },
+      { text: 'Ciao', lang: 'Italian', dir: 'ltr', anim: 'type' },
+      { text: 'Olá', lang: 'Portuguese', dir: 'ltr', anim: 'type' },
+      { text: 'Привет', lang: 'Russian', dir: 'ltr', anim: 'type' },
+      { text: 'Hallo', lang: 'German', dir: 'ltr', anim: 'type' },
+      { text: 'Merhaba', lang: 'Turkish', dir: 'ltr', anim: 'type' },
+      { text: 'Xin chào', lang: 'Vietnamese', dir: 'ltr', anim: 'type' },
+      { text: 'สวัสดี', lang: 'Thai', dir: 'ltr', anim: 'slide' },
+      { text: 'Γεια σου', lang: 'Greek', dir: 'ltr', anim: 'type' },
+      { text: 'Cześć', lang: 'Polish', dir: 'ltr', anim: 'type' },
+      { text: 'Hoi', lang: 'Dutch', dir: 'ltr', anim: 'type' },
+      { text: 'Hej', lang: 'Swedish', dir: 'ltr', anim: 'type' },
+      { text: 'Halo', lang: 'Indonesian', dir: 'ltr', anim: 'type' },
+      { text: 'Habari', lang: 'Swahili', dir: 'ltr', anim: 'type' },
+      { text: 'Привіт', lang: 'Ukrainian', dir: 'ltr', anim: 'type' },
+      { text: 'Ahoj', lang: 'Czech', dir: 'ltr', anim: 'type' },
+      { text: 'Kumusta', lang: 'Filipino', dir: 'ltr', anim: 'type' },
+      { text: 'স্বাগতম', lang: 'Bengali', dir: 'ltr', anim: 'slide' },
+      { text: 'வணக்கம்', lang: 'Tamil', dir: 'ltr', anim: 'slide' },
+      { text: 'Selamat', lang: 'Malay', dir: 'ltr', anim: 'type' },
+      { text: 'Hei', lang: 'Norwegian', dir: 'ltr', anim: 'type' },
+      { text: 'Hej', lang: 'Danish', dir: 'ltr', anim: 'type' },
+      { text: 'Moi', lang: 'Finnish', dir: 'ltr', anim: 'type' },
+      { text: 'Szia', lang: 'Hungarian', dir: 'ltr', anim: 'type' },
+      { text: 'Salut', lang: 'Romanian', dir: 'ltr', anim: 'type' },
+      { text: 'Hola', lang: 'Catalan', dir: 'ltr', anim: 'type' },
+      { text: 'Ahoj', lang: 'Slovak', dir: 'ltr', anim: 'type' },
+      { text: 'Bok', lang: 'Croatian', dir: 'ltr', anim: 'type' },
+      { text: 'Здраво', lang: 'Serbian', dir: 'ltr', anim: 'type' },
+      { text: 'Živjo', lang: 'Slovenian', dir: 'ltr', anim: 'type' },
+      { text: 'Sveiki', lang: 'Latvian', dir: 'ltr', anim: 'type' },
+      { text: 'Labas', lang: 'Lithuanian', dir: 'ltr', anim: 'type' },
+      { text: 'Tere', lang: 'Estonian', dir: 'ltr', anim: 'type' },
+      { text: 'Halló', lang: 'Icelandic', dir: 'ltr', anim: 'type' },
+      { text: 'Helo', lang: 'Welsh', dir: 'ltr', anim: 'type' },
+      { text: 'Dia dhuit', lang: 'Irish', dir: 'ltr', anim: 'type' },
+      { text: 'Halò', lang: 'Scottish Gaelic', dir: 'ltr', anim: 'type' },
+      { text: 'Kia ora', lang: 'Māori', dir: 'ltr', anim: 'type' },
+      { text: 'Aloha', lang: 'Hawaiian', dir: 'ltr', anim: 'type' },
+      { text: 'Talofa', lang: 'Samoan', dir: 'ltr', anim: 'type' },
+    ];
   currentGreetingIndex = signal(0);
   greetingFading = signal(false);
   typewriterText = signal('');
@@ -2449,8 +2479,9 @@ export class ChatComponent implements OnDestroy, AfterViewInit {
     effect(() => {
       const messages = this.chatService.messages();
 
-      // When messages are cleared (new chat), focus the input
+      // When messages are cleared (new chat), reset to welcome screen
       if (prevMessageCount > 0 && messages.length === 0) {
+        this.chatStarted.set(false);
         this.focusChatInput();
       }
       prevMessageCount = messages.length;
@@ -2707,6 +2738,9 @@ export class ChatComponent implements OnDestroy, AfterViewInit {
     const message = this.userMessage;
     this.userMessage = '';
 
+    // Trigger slide-down animation immediately (before any async operations)
+    this.chatStarted.set(true);
+
     // TODO(#file-attachments): Include attachedFiles in the message payload.
     // The UI allows attaching files (stored in this.attachedFiles signal), but they
     // are not currently sent to the backend. To complete this feature:
@@ -2737,6 +2771,10 @@ export class ChatComponent implements OnDestroy, AfterViewInit {
         );
         // Restore the message so user can edit it
         this.userMessage = message;
+        // Reset animation state if no messages yet (return to welcome screen)
+        if (this.chatService.messages().length === 0) {
+          this.chatStarted.set(false);
+        }
         return;
       }
       // Clear any previous flagging
