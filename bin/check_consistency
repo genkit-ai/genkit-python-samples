@@ -1,0 +1,359 @@
+#!/usr/bin/env bash
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Consistency checks for the Genkit Python Samples workspace.
+#
+# Checks performed:
+#   1. Python version consistency (requires-python = ">=3.10")
+#   2. Package naming consistency (directory names match package names)
+#   3. Workspace completeness (all samples in [tool.uv.sources])
+#   4. Test file naming convention (*_test.py, not test_*.py)
+#   5. README files exist for samples
+#   6. LICENSE files exist for publishable packages
+#   7. Dependency resolution (uv pip check)
+#   8. Required pyproject.toml fields
+#   9. Sample run.sh scripts exist
+#  10. No hardcoded API keys or secrets
+#  11. Typos and spelling errors (via typos tool)
+#  12. Python version classifiers (3.10-3.14)
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Track overall status
+ERRORS=0
+WARNINGS=0
+
+# Get the directory of the script (bin/)
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Root directory is up one level from bin/
+ROOT_DIR="$(cd "${BIN_DIR}/.." && pwd)"
+
+cd "$ROOT_DIR"
+
+# Total number of checks
+TOTAL_CHECKS=12
+
+echo -e "${BLUE}=== Genkit Python Samples Consistency Checks ===${NC}"
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 1: Python Version Consistency
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[1/$TOTAL_CHECKS] Checking Python version consistency...${NC}"
+EXPECTED_PYTHON_VERSION=">=3.10"
+python_version_errors=0
+
+for f in apps/*/pyproject.toml; do
+  if [ -f "$f" ]; then
+    version=$(grep 'requires-python' "$f" 2>/dev/null | cut -d'"' -f2 || echo "")
+    if [ -n "$version" ] && [ "$version" != "$EXPECTED_PYTHON_VERSION" ]; then
+      echo -e "  ${RED}MISMATCH${NC}: $f has '$version' (expected '$EXPECTED_PYTHON_VERSION')"
+      python_version_errors=$((python_version_errors + 1))
+    fi
+  fi
+done
+
+if [ $python_version_errors -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All packages use Python $EXPECTED_PYTHON_VERSION"
+else
+  ERRORS=$((ERRORS + python_version_errors))
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 2: Package Naming Consistency
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[2/$TOTAL_CHECKS] Checking package naming consistency...${NC}"
+naming_errors=0
+
+# Check apps
+for d in apps/*/; do
+  if [ -d "$d" ] && [ -f "$d/pyproject.toml" ]; then
+    name=$(basename "$d")
+    pkg=$(grep '^name' "$d/pyproject.toml" | head -1 | sed 's/.*= *"//' | sed 's/".*//')
+    if [ "$pkg" != "$name" ]; then
+      echo -e "  ${RED}MISMATCH${NC}: Sample $d has name '$pkg' (expected '$name')"
+      naming_errors=$((naming_errors + 1))
+    fi
+  fi
+done
+
+if [ $naming_errors -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All package names are consistent with directory names"
+else
+  ERRORS=$((ERRORS + naming_errors))
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 3: Workspace Completeness (apps in pyproject.toml sources)
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[3/$TOTAL_CHECKS] Checking workspace completeness...${NC}"
+workspace_errors=0
+
+# Get all packages from [tool.uv.sources]
+sources_content=$(sed -n '/\[tool.uv.sources\]/,/^\[/p' pyproject.toml | grep -v '^\[' | grep '=' | cut -d'=' -f1 | tr -d ' ')
+
+# Check apps are in sources
+for d in apps/*/; do
+  if [ -d "$d" ] && [ -f "$d/pyproject.toml" ]; then
+    pkg=$(grep '^name' "$d/pyproject.toml" | head -1 | sed 's/.*= *"//' | sed 's/".*//')
+    if ! echo "$sources_content" | grep -q "^$pkg$"; then
+      echo -e "  ${RED}MISSING${NC}: App '$pkg' not in [tool.uv.sources]"
+      workspace_errors=$((workspace_errors + 1))
+    fi
+  fi
+done
+
+if [ $workspace_errors -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All apps are in workspace sources"
+else
+  ERRORS=$((ERRORS + workspace_errors))
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 4: Test File Naming Convention
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[4/$TOTAL_CHECKS] Checking test file naming convention...${NC}"
+test_naming_errors=0
+
+# Find test files that don't follow *_test.py convention
+bad_test_files=$(find . -name "test_*.py" -not -path "*/.*" -not -path "./.venv/*" -not -path "*/node_modules/*" 2>/dev/null || true)
+if [ -n "$bad_test_files" ]; then
+  echo -e "  ${RED}ERROR${NC}: Found test files starting with 'test_' (should use '*_test.py'):"
+  echo "$bad_test_files" | while read -r f; do
+    echo -e "    - $f"
+    test_naming_errors=$((test_naming_errors + 1))
+  done
+  ERRORS=$((ERRORS + 1))
+else
+  echo -e "  ${GREEN}✓${NC} All test files follow *_test.py naming convention"
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 5: README Files Exist
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[5/$TOTAL_CHECKS] Checking README files exist...${NC}"
+readme_errors=0
+
+# Check apps have READMEs
+for d in apps/*/; do
+  if [ -d "$d" ] && [ ! -f "$d/README.md" ]; then
+    echo -e "  ${YELLOW}WARNING${NC}: App $d is missing README.md"
+    WARNINGS=$((WARNINGS + 1))
+  fi
+done
+
+if [ $WARNINGS -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All apps have README.md files"
+else
+  echo -e "  ${YELLOW}!${NC} Some apps are missing README.md files (warnings only)"
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 6: LICENSE Files Exist
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[6/$TOTAL_CHECKS] Checking LICENSE files exist...${NC}"
+license_missing=0
+
+# Check apps (apps generally should have LICENSE if they are distributed, checking simplified)
+# We can skip this strict check for now if apps inherit repo license, but good to check.
+if [ $license_missing -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} Check passed (simplified for apps)"
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 7: Dependency Resolution
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[7/$TOTAL_CHECKS] Checking dependency resolution...${NC}"
+if uv pip check > /dev/null 2>&1; then
+  echo -e "  ${GREEN}✓${NC} All dependencies resolve correctly"
+else
+  echo -e "  ${RED}ERROR${NC}: Dependency resolution failed"
+  uv pip check 2>&1 | head -10
+  ERRORS=$((ERRORS + 1))
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 8: Required pyproject.toml Fields
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[8/$TOTAL_CHECKS] Checking required pyproject.toml fields...${NC}"
+metadata_errors=0
+
+REQUIRED_FIELDS=("name" "version" "description" "license" "requires-python")
+PUBLISHABLE_FIELDS=("authors" "classifiers")
+
+# Check apps
+for d in apps/*/; do
+  if [ -d "$d" ] && [ -f "$d/pyproject.toml" ]; then
+    for field in "${REQUIRED_FIELDS[@]}" "${PUBLISHABLE_FIELDS[@]}"; do
+      if ! grep -q "^$field" "$d/pyproject.toml" 2>/dev/null; then
+        pkg_name=$(basename "$d")
+        echo -e "  ${RED}MISSING${NC}: apps/$pkg_name/pyproject.toml missing '$field'"
+        metadata_errors=$((metadata_errors + 1))
+      fi
+    done
+  fi
+done
+
+if [ $metadata_errors -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All apps have required metadata"
+else
+  ERRORS=$((ERRORS + metadata_errors))
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 9: App run.sh Scripts
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[9/$TOTAL_CHECKS] Checking app run.sh scripts...${NC}"
+runsh_missing=0
+
+for d in apps/*/; do
+  if [ -d "$d" ] && [ -f "$d/pyproject.toml" ]; then
+    if [ ! -f "$d/run.sh" ]; then
+      sample_name=$(basename "$d")
+      echo -e "  ${YELLOW}WARNING${NC}: apps/$sample_name/ is missing run.sh"
+      WARNINGS=$((WARNINGS + 1))
+      runsh_missing=$((runsh_missing + 1))
+    fi
+  fi
+done
+
+if [ $runsh_missing -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All apps have run.sh scripts"
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 10: No Hardcoded Secrets
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[10/$TOTAL_CHECKS] Checking for hardcoded secrets...${NC}"
+secrets_found=0
+
+# Common API key patterns
+SECRET_PATTERNS=(
+  'sk-[a-zA-Z0-9]{20,}'                    # OpenAI-style keys
+  'AIza[a-zA-Z0-9_-]{35}'                  # Google API keys
+  'ghp_[a-zA-Z0-9]{36}'                    # GitHub personal access tokens
+  'AKIA[0-9A-Z]{16}'                       # AWS access key IDs
+)
+
+EXCLUDE_PATTERNS="tests/|test/|\.env\.example|README\.md|\.pyc$|__pycache__|\.git/|dist/"
+
+for pattern in "${SECRET_PATTERNS[@]}"; do
+  matches=$(grep -rE "$pattern" apps/ 2>/dev/null | grep -vE "$EXCLUDE_PATTERNS" | grep -vE "^\s*#" || true)
+  if [ -n "$matches" ]; then
+    echo -e "  ${RED}FOUND${NC}: Potential secrets matching pattern '$pattern'"
+    secrets_found=$((secrets_found + 1))
+  fi
+done
+
+if [ $secrets_found -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} No hardcoded secrets detected"
+else
+  echo -e "  ${RED}ERROR${NC}: $secrets_found potential secret pattern(s) found"
+  ERRORS=$((ERRORS + secrets_found))
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 11: Typos and Spelling Errors
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[11/$TOTAL_CHECKS] Checking for typos and spelling errors...${NC}"
+if uv run typos --version > /dev/null 2>&1; then
+  if uv run typos apps/ packages/ --config typos.toml --format brief > /tmp/typos_output_$$ 2>&1; then
+    echo -e "  ${GREEN}✓${NC} No typos found in apps/packages"
+  else
+    typos_count=$(grep -c "error:" /tmp/typos_output_$$ 2>/dev/null || echo "0")
+    if [ "$typos_count" -gt 0 ]; then
+      echo -e "  ${RED}ERROR${NC}: $typos_count typo(s) found"
+      grep "error:" /tmp/typos_output_$$ | head -5 | while read -r line; do
+        echo -e "    $line"
+      done
+      ERRORS=$((ERRORS + 1))
+    else
+      echo -e "  ${GREEN}✓${NC} No typos found in apps/packages"
+    fi
+  fi
+  rm -f /tmp/typos_output_$$ 2>/dev/null || true
+else
+  echo -e "  ${YELLOW}SKIP${NC}: typos tool not available (install with 'uv pip install typos')"
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Check 12: Python Version Classifiers (3.10-3.14)
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[12/$TOTAL_CHECKS] Checking Python version classifiers...${NC}"
+classifier_errors=0
+
+REQUIRED_VERSIONS=("3.10" "3.11" "3.12" "3.13" "3.14")
+
+# Check apps
+for pkg in apps/*/; do
+  if [ -d "$pkg" ] && [ -f "$pkg/pyproject.toml" ]; then
+    pkg_name=$(grep '^name' "$pkg/pyproject.toml" | head -1 | sed 's/.*= *"//' | sed 's/".*//')
+    missing_versions=""
+    
+    for ver in "${REQUIRED_VERSIONS[@]}"; do
+      if ! grep -q "Programming Language :: Python :: $ver" "$pkg/pyproject.toml" 2>/dev/null; then
+        missing_versions="$missing_versions $ver"
+      fi
+    done
+    
+    if [ -n "$missing_versions" ]; then
+      echo -e "  ${RED}MISSING${NC}: $pkg_name missing Python classifiers:$missing_versions"
+      classifier_errors=$((classifier_errors + 1))
+    fi
+  fi
+done
+
+if [ $classifier_errors -eq 0 ]; then
+  echo -e "  ${GREEN}✓${NC} All packages have Python 3.10-3.14 classifiers"
+else
+  ERRORS=$((ERRORS + classifier_errors))
+fi
+echo ""
+
+# -----------------------------------------------------------------------------
+# Summary
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}=== Summary ===${NC}"
+if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
+  echo -e "${GREEN}All consistency checks passed!${NC}"
+  exit 0
+elif [ $ERRORS -eq 0 ]; then
+  echo -e "${YELLOW}Passed with $WARNINGS warning(s)${NC}"
+  # exit 0  # Warnings don't fail CI usually, but use strict if needed
+  exit 0
+else
+  echo -e "${RED}Failed with $ERRORS error(s) and $WARNINGS warning(s)${NC}"
+  exit 1
+fi

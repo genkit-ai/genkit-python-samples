@@ -1,0 +1,19 @@
+{
+    "name": "genkit-python-samples",
+    "private": true,
+    "scripts": {
+        "preinstall": "npx only-allow pnpm",
+        "format": "bin/fmt",
+        "lint": "bin/lint",
+        "format:biome": "pnpm dlx @biomejs/biome check --formatter-enabled=true --linter-enabled=false --organize-imports-enabled=true --fix .",
+        "format:biome-check": "pnpm dlx @biomejs/biome ci --linter-enabled=false --formatter-enabled=true --organize-imports-enabled=false .",
+        "lint:biome": "pnpm dlx @biomejs/biome lint --fix ."
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^1.9.4",
+        "npm-run-all": "^4.1.5",
+        "only-allow": "^1.2.1",
+        "prettier": "^3.5.3"
+    },
+    "packageManager": "pnpm@10.2.0"
+}

@@ -1,0 +1,7 @@
+src:
+- any: ['apps/**/*', 'packages/**/*']
+  all: ['!**/*.md', '!**/*.txt']
+documentation:
+- any: ['docs/**/*', '**/*.md', '**/*.txt']
+workflows:
+- any: ['.github/workflows/**/*']

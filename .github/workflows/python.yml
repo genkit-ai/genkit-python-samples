@@ -1,0 +1,191 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Python Checks
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/python.yml"
+      - "bin/**"
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =============================================================================
+  # Fast checks that run quickly and catch common issues early
+  # =============================================================================
+  lint-and-format:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group lint
+
+      - name: Check lockfile is up to date
+        run: uv lock --check
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint with ruff
+        run: uv run ruff check .
+
+      - name: Check test file naming convention
+        run: |
+          if find apps -name "test_*.py" -not -path "*/.*" | grep -q .; then
+              echo "Error: Found Python test files starting with 'test_'. Please use the '*_test.py' format instead:"
+              find apps -name "test_*.py" -not -path "*/.*"
+              exit 1
+          fi
+
+  # =============================================================================
+  # Type checking (runs in parallel with lint)
+  # =============================================================================
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group lint
+
+      - name: Type check with Ty
+        run: uv run ty check .
+
+      - name: Type check with Pyrefly
+        run: uv run pyrefly check .
+
+      - name: Type check with Pyright
+        run: uv run pyright .
+
+  # =============================================================================
+  # Security and compliance checks
+  # =============================================================================
+  security-and-compliance:
+    name: Security and Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group lint
+
+      - name: Install license tools
+        run: |
+          npm install -g license-checker
+          go install github.com/google/go-licenses@latest
+
+      - name: Check source file license headers
+        run: ./bin/check_license
+
+      - name: Check dependency licenses
+        run: uv run liccheck -s pyproject.toml
+
+      - name: Run security scan (bandit)
+        run: ./bin/run_python_security_checks
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Check for common API key patterns
+          if grep -rE "(sk-[a-zA-Z0-9]{20,}|AIza[a-zA-Z0-9_-]{35}|AKIA[0-9A-Z]{16})" \
+              apps/ --include="*.py" | grep -vE "test|mock|fake|example|#"; then
+            echo "Error: Potential hardcoded secrets found"
+            exit 1
+          fi
+          echo "No hardcoded secrets detected"
+
+  # =============================================================================
+  # Consistency checks (package metadata, workspace, naming)
+  # =============================================================================
+  consistency-check:
+    name: Consistency Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group lint
+
+      - name: Run consistency checks
+        run: ./bin/check_consistency
+
+  # =============================================================================
+  # Unit tests across multiple Python versions
+  # =============================================================================
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: [lint-and-format]
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and setup Python
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run tests
+        run: |
+          uv run --python ${{ matrix.python-version }} --active --isolated \
+            pytest -xvs --log-level=DEBUG .
