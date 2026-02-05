@@ -44,6 +44,11 @@ dependencies = [
   # Model plugins
   "genkit-plugin-google-genai",
   "genkit-plugin-ollama",
+  "genkit-plugin-amazon-bedrock",
+  "genkit-plugin-cloudflare-workers-ai",
+  "genkit-plugin-microsoft-foundry",
+  "genkit-plugin-anthropic",
+  "genkit-plugin-compat-oai",
 
   # Vector store (local)
   "genkit-plugin-dev-local-vectorstore",
@@ -88,6 +93,11 @@ testpaths    = ["tests"]
 # Use git sources from firebase/genkit for development
 [tool.uv.sources]
 genkit                              = { git = "https://github.com/firebase/genkit", subdirectory = "py/packages/genkit" }
+genkit-plugin-amazon-bedrock        = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/amazon-bedrock" }
+genkit-plugin-anthropic             = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/anthropic" }
+genkit-plugin-cloudflare-workers-ai = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/cloudflare-workers-ai" }
+genkit-plugin-compat-oai            = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/compat-oai" }
 genkit-plugin-dev-local-vectorstore = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/dev-local-vectorstore" }
 genkit-plugin-google-genai          = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/google-genai" }
+genkit-plugin-microsoft-foundry     = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/microsoft-foundry" }
 genkit-plugin-ollama                = { git = "https://github.com/firebase/genkit", subdirectory = "py/plugins/ollama" }

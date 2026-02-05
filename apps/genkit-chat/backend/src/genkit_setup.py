@@ -21,16 +21,18 @@ It allows the app to run with any subset of model providers.
 
 Supported Providers::
 
-    ┌─────────────────────┬─────────────────────────────────────────────┐
-    │ Provider            │ Environment Variable                        │
-    ├─────────────────────┼─────────────────────────────────────────────┤
-    │ Google AI           │ GOOGLE_GENAI_API_KEY                        │
-    │ Vertex AI           │ GOOGLE_CLOUD_PROJECT (+ ADC)                │
-    │ Anthropic           │ ANTHROPIC_API_KEY                           │
-    │ OpenAI              │ OPENAI_API_KEY                              │
-    │ Cloudflare AI       │ CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN│
-    │ Ollama (local)      │ OLLAMA_HOST (default: localhost:11434)      │
-    └─────────────────────┴─────────────────────────────────────────────┘
+    ┌─────────────────────┬─────────────────────────────────────────────────────┐
+    │ Provider            │ Environment Variable                                │
+    ├─────────────────────┼─────────────────────────────────────────────────────┤
+    │ Google AI           │ GOOGLE_GENAI_API_KEY                                │
+    │ Vertex AI           │ GOOGLE_CLOUD_PROJECT (+ ADC)                        │
+    │ Anthropic           │ ANTHROPIC_API_KEY                                   │
+    │ OpenAI              │ OPENAI_API_KEY                                      │
+    │ AWS Bedrock         │ AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY           │
+    │ Microsoft Foundry   │ AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY        │
+    │ Cloudflare AI       │ CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN        │
+    │ Ollama (local)      │ OLLAMA_HOST (default: localhost:11434)              │
+    └─────────────────────┴─────────────────────────────────────────────────────┘
 
 Usage:
     from genkit_setup import get_genkit, get_available_models
@@ -118,15 +120,35 @@ def _load_plugins() -> list[Any]:
         except ImportError:
             logger.warning('OpenAI plugin not installed')
 
-    # Cloudflare AI
+    # Cloudflare Workers AI (consolidated plugin)
     if os.getenv('CLOUDFLARE_ACCOUNT_ID') and os.getenv('CLOUDFLARE_API_TOKEN'):
         try:
-            from genkit.plugins.cf_ai import CfAI
+            from genkit.plugins.cloudflare_workers_ai import CloudflareWorkersAI
 
-            plugins.append(CfAI())
-            logger.info('Loaded Cloudflare AI plugin')
+            plugins.append(CloudflareWorkersAI())
+            logger.info('✓ Loaded Cloudflare Workers AI plugin')
         except ImportError:
-            logger.warning('Cloudflare AI plugin not installed')
+            logger.warning('Cloudflare Workers AI plugin not installed')
+
+    # AWS Bedrock (consolidated plugin)
+    if os.getenv('AWS_ACCESS_KEY_ID') and os.getenv('AWS_SECRET_ACCESS_KEY'):
+        try:
+            from genkit.plugins.amazon_bedrock import AmazonBedrock
+
+            plugins.append(AmazonBedrock())
+            logger.info('✓ Loaded AWS Bedrock plugin')
+        except ImportError:
+            logger.warning('AWS Bedrock plugin not installed')
+
+    # Microsoft Foundry (consolidated plugin - Azure AI Foundry)
+    if os.getenv('AZURE_OPENAI_ENDPOINT') and os.getenv('AZURE_OPENAI_API_KEY'):
+        try:
+            from genkit.plugins.microsoft_foundry import MicrosoftFoundry
+
+            plugins.append(MicrosoftFoundry())
+            logger.info('✓ Loaded Microsoft Foundry plugin')
+        except ImportError:
+            logger.warning('Microsoft Foundry plugin not installed')
 
     # Ollama (always try - it's for local development)
     ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
@@ -134,7 +156,7 @@ def _load_plugins() -> list[Any]:
         from genkit.plugins.ollama import Ollama
 
         plugins.append(Ollama(server_address=ollama_host))
-        logger.info(f'Loaded Ollama plugin (host: {ollama_host})')
+        logger.info(f'✓ Loaded Ollama plugin (host: {ollama_host})')
     except ImportError:
         logger.warning('Ollama plugin not installed')
 

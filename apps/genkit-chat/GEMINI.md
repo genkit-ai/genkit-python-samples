@@ -40,7 +40,9 @@ requires specific dependencies in `backend/pyproject.toml`.
 | Vertex AI | `GOOGLE_CLOUD_PROJECT` | `genkit.plugins.vertex_ai.ModelGardenPlugin` | `genkit-plugin-vertex-ai` |
 | Anthropic | `ANTHROPIC_API_KEY` | `genkit.plugins.anthropic.Anthropic` | `genkit-plugin-anthropic` |
 | OpenAI | `OPENAI_API_KEY` | `genkit.plugins.compat_oai.OpenAI` | `genkit-plugin-compat-oai` |
-| Cloudflare AI | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | `genkit.plugins.cf_ai.CfAI` | `genkit-plugin-cf-ai` |
+| AWS Bedrock | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | `genkit.plugins.amazon_bedrock.AmazonBedrock` | `genkit-plugin-amazon-bedrock` |
+| Microsoft Foundry | `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` | `genkit.plugins.microsoft_foundry.MicrosoftFoundry` | `genkit-plugin-microsoft-foundry` |
+| Cloudflare AI | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | `genkit.plugins.cloudflare_workers_ai.CloudflareWorkersAI` | `genkit-plugin-cloudflare-workers-ai` |
 | Ollama | (always tries) | `genkit.plugins.ollama.Ollama` | `genkit-plugin-ollama` |
 
 ### Adding a New Plugin
@@ -124,7 +126,7 @@ See the library README at `../vibe/README.md` for full documentation.
 The frontend has a fallback list of default models in `models.service.ts` for when the backend
 is unavailable. These models MUST match actual models supported by the corresponding plugins.
 
-**Cloudflare AI Models** - Use models from `plugins/cf-ai/src/genkit/plugins/cf_ai/model_info.py`:
+**Cloudflare AI Models** - Use models from `cloudflare-workers-ai` plugin:
 - `@cf/meta/llama-3.3-70b-instruct-fp8-fast`
 - `@cf/meta/llama-3.1-8b-instruct`
 - `@cf/google/gemma-3-12b-it` (vision)
