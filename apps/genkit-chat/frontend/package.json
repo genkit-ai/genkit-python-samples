@@ -41,7 +41,7 @@
     "@tensorflow-models/toxicity": "^1.2.2",
     "@tensorflow/tfjs": "^4.22.0",
     "@types/dompurify": "^3.2.0",
-    "dompurify": "^3.3.1",
+    "dompurify": "^3.4.0",
     "highlight.js": "^11.11.1",
     "jwt-decode": "^4.0.0",
     "marked": "^17.0.1",
